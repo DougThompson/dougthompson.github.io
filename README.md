@@ -1,0 +1,2 @@
+# dougthompson.github.io
+Static
