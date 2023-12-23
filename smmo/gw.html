@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Rain Forest Guild Wars</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+
+    <style>
+        body {
+            font-family: arial;
+            font-size: 0.8rem;
+        }
+        * {
+            font-size: 0.98rem !important;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <p>
+            <a href="https://web.simple-mmo.com/travel?new_page=true">&lt; Return to Travel</a>
+            | <a target="_blank" href="https://web.simple-mmo.com/healer?new_page=true">Folen The Healer</a>
+            | <a target="_blank" href="https://web.simple-mmo.com/inventory/items?type%5B0%5D=Food&order_col=items.stat1modifier&order=desc&page=1">Food</a>
+            <button id="btnGetProfile" style="width: 200px; padding: 0px">Get Profile</button>
+        </p>
+        <p id="user">
+        </p>
+
+        <div class="grid">
+            <div>
+                <table role="grid">
+                    <thead>
+                        <tr>
+                            <th scope="col"></th>
+                            <th scope="col">Guild</th>
+                            <th scope="col">Avail</th>
+                            <th scope="col">Our Kills</th>
+                            <th scope="col">Our Deaths</th>
+                        </tr>
+                    </thead>
+                    <tbody id="app">
+                    </tbody>
+                </table>
+
+            </div>
+            <div style="font-size: 14px;">
+                <div>War Options</div>
+                <div id="sorting" style="width: 100%">
+                    <!-- <p style="margin-block-end: 0em;">Sorting</p> -->
+                    <label for="guild" style="display: inline">By Guild</label>
+                    <input type="radio" name="subscribe" id="guild" value="guild" checked />
+                    <label for="level" style="display: inline">By Level L>H</label>
+                    <input type="radio" name="subscribe" id="levelLow" value="levelLow" />
+                    <label for="level" style="display: inline">By Level H>L</label>
+                    <input type="radio" name="subscribe" id="levelHigh" value="levelHigh" />
+                </div>
+                <p>
+                    <button id="btnGetPvp" style="width: 200px; padding: 0px">Get PvP</button>
+                    <button id="btnGetNext" style="width: 200px; padding: 0px">Get Next</button>
+                </p>
+                <div id="sorted">
+
+                </div>
+            </div>
+        </div>
+    </main>
+</body>
+
+<script type="module">
+    var memberIndex = 0;
+    var warIds = [];
+    var allAvail = [];
+    var sortAvailLow = [];
+    var sortAvailHigh = [];
+    let radioVal = "guild";
+
+    const guildLimit = 19;
+    const maxLevel = 30000;
+    const priorityWarIds = [610, 455, 574, 243, 2322, 677, 607, 39, 2089, 482];
+
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+    document.getElementById("btnGetProfile").addEventListener("click", getMyProfile, false);
+    document.getElementById("btnGetNext").addEventListener("click", getNextPvp, false);
+    document.getElementById("btnGetPvp").addEventListener("click", getAllPvp, false);
+
+    var getProfile = async function () {
+        console.log("Getting profile...");
+
+        let url = 'https://api.simple-mmo.com/v1/player/me?api_key=V2FXy9Wi5HJfKUg7KRlwZy2kz4kITEAQpXngtwbtJdkHLILktx9969ywUsB9U5Fm0FsT22vG6hpKpVvY';
+        let lblStart = "<span style='color: #40E0D0;'>";
+        let lblEnd = "</span>";
+
+        let postResp = await fetch(url, {method: 'POST'});
+        let data =  await postResp.json();
+        const qpep = document.getElementById("qpep");
+        if (qpep) qpep.remove();
+
+        let fragment = document.createDocumentFragment();
+        let div = fragment.appendChild(document.createElement("span"));
+        div.setAttribute("style", "padding-left: 20px; background-color:rgba(33, 33, 33, 0.75); padding: 1px;");
+        div.setAttribute("id", "qpep");
+
+        let safemode = data.safeMode == 0 ? false : true;
+        let safemodeEnd = "";
+        if (data.safe_mode_time) {
+            safemodeEnd = data.safe_mode_time;
+        }
+
+        let hp = ((data.hp / data.max_hp) * 100).toFixed(2);
+
+        let qp = data.quest_points;
+        let mqp = data.maximum_quest_points;
+        let qpcolor = "#e5e5e5";
+
+        let ep = data.energy;
+        let mep = data.maximum_energy;
+        let epcolor = qpcolor;
+
+        if (qp === mqp) qpcolor = "orange";
+        if (ep === mep) epcolor = "orange";
+
+        div.innerHTML += `${data.name}:&nbsp;&nbsp;${lblStart}<a href="https://web.simple-mmo.com/quests/viewall" target="_blank">QP</a>:${lblEnd} <span style="color: ${qpcolor}">${qp}</span>`
+        div.innerHTML += ` | ${lblStart}<a href="https://web.simple-mmo.com/battle/menu"  target="_blank">EP</a>:${lblEnd} <span style="color: ${epcolor}">${ep}</span>`
+        div.innerHTML += ` | ${lblStart}<a href="https://web.simple-mmo.com/healer?new_page=true" target="_blank">HP</a>:${lblEnd} ${hp}%`;
+
+        document.querySelector('#user').appendChild(div);
+    }
+
+    var getWars = async function () {
+        console.log("Getting Wars...");
+
+        let url = 'https://api.simple-mmo.com/v1/guilds/wars/2257/1?api_key=V2FXy9Wi5HJfKUg7KRlwZy2kz4kITEAQpXngtwbtJdkHLILktx9969ywUsB9U5Fm0FsT22vG6hpKpVvY';
+
+        let postResp = await fetch(url, {method: 'POST'});
+        let data = await postResp.json();
+        processWars(data);
+    };
+
+    function processWars(data) {
+        let wars = [];
+        let priorityWars = [];
+        for (let w = 0; w < data.length; w++) {
+            let gw = data[w].guild_1.id !== 2257 ? data[w].guild_1 : data[w].guild_2;
+            let gwKills = data[w].guild_1.id == 2257 ? data[w].guild_1.kills : data[w].guild_2.kills;
+            wars.push(
+                {
+                    id: gw.id, name: gw.name, kills: gwKills, deaths: gw.kills,
+                    url: `https://web.simple-mmo.com/guilds/view/${gw.id}/members?username=&min_level=100&max_level=${maxLevel}&role=&attackable=on&online_status=&inactivity_status=&new_page=true`
+                }
+            );
+        }
+        let sortedWars = wars.sort(
+            (p1, p2) => (p1.kills < p2.kills) ? 1 : (p1.kills > p2.kills) ? -1 : 0
+        );
+        // console.log("sortedWars", sortedWars);
+
+        for(let p = 0; p < priorityWarIds.length; p++) {
+            let w = 0;
+            while (w < sortedWars.length) {
+                let sw = sortedWars[w];
+                if(sw.id === priorityWarIds[p]) {
+                    priorityWars.push(JSON.parse(JSON.stringify(sw)));
+                    sortedWars.splice(w, 1);
+                    break;
+                }
+                else {
+                    w++;
+                }
+            }
+        }
+
+        let procArrays = priorityWars.concat(sortedWars);
+
+        procArrays.forEach((item, idx) => {
+            warIds.push(item.id);
+            const div = document.createElement('tr');
+            div.innerHTML = `<td><input type="checkbox" id="chk${item.id}" name="guild-${item.id}" value="${item.id}"></td><td scope="row"><a href="${item.url}" target="_blank">${item.name}</a></td><td id="${item.id}"><a href='#' onclick='attackable("${item.id}");return false;'>...</a></td><td>${item.kills}</td><td>${item.deaths}</td>`;
+            document.querySelector('#app').appendChild(div);
+        });
+
+        // console.log("warids", warIds);
+    }
+
+    window.attackable = attackable;
+    function attackable(warId){
+        getAttackableById(warId);
+    }
+
+    var getAttackable = async function () {
+        console.log("Getting Attackable...");
+        
+        for(var i = 0; i < warIds.length; i++) {
+            await getAttackableById(warIds[i]);
+            if(i >= guildLimit) {
+                sortAvailHigh = [...allAvail].sort(
+                    (p1, p2) => (p1.level < p2.level) ? 1 : (p1.level > p2.level) ? -1 : 0
+                );
+                sortAvailLow = [...allAvail].sort(
+                    (p1, p2) => (p1.level > p2.level) ? 1 : (p1.level < p2.level) ? -1 : 0
+                );
+                applySort("guild");
+                break;
+            }
+            await sleep(2000);
+        }
+    };
+
+    var getAttackableById = async function (warId) {
+        console.log(`Getting detaisl for ${warId}...`);
+
+        let url = `https://api.simple-mmo.com/v1/guilds/members/${warId}?api_key=V2FXy9Wi5HJfKUg7KRlwZy2kz4kITEAQpXngtwbtJdkHLILktx9969ywUsB9U5Fm0FsT22vG6hpKpVvY`;
+        let postResp = await fetch(url, {method: 'POST'});
+        let data = await postResp.json();
+
+        let attackable = [];
+        let available = [];
+        let highLevel = 0;
+        for(var j = 0; j < data.length; j++) {
+            let player = data[j];
+            if(player.banned == 1 || player.safe_mode == 1) continue;
+            if(player.level <= 100) continue;
+            // if(player.warrior == 0 && player.level <= 200) continue;
+
+            attackable.push(player);
+        }
+        for(var j = 0; j < attackable.length; j++) {
+            let player = attackable[j];
+
+            let curHp = (player.current_hp / player.max_hp)*100;
+            if(curHp >= 50 && player.level <= maxLevel) {
+                highLevel = highLevel + (player.level >= 15000 ? 1 : 0);
+                player.hpp_percent = curHp;
+                player.url = `https://web.simple-mmo.com/user/attack/${player.user_id}?autoclose=1`;
+                available.push(player);
+                allAvail.push(player);
+            }
+        }
+        
+        applySort(radioVal);
+
+        let td = document.getElementById(warId);
+        td.innerHTML = `<a href='#' onclick='attackable("${warId}");return false;'>${available.length}\\${attackable.length} (${highLevel})</a>`;
+    }
+
+    function getMyProfile() {
+        getProfile();
+    }
+
+    function getNextPvp() {
+        let curSort;
+        if(radioVal == "guild") {
+            curSort = allAvail;
+        }
+        else if(radioVal == "levelHigh") {
+            curSort = sortAvailHigh;
+        }
+        else {
+            curSort = sortAvailLow;
+        }
+
+        // console.log(memberIndex);
+        let pvp = curSort[memberIndex];
+        window.open(pvp.url, '_blank').focus();
+        memberIndex++;
+    }
+
+    function pinatabtn() {
+        const btn = document.createElement("button");
+        btn.innerHTML = `Get Profile`;
+        return btn;
+    }
+
+    const radios = document.querySelectorAll('input[name="subscribe"]');
+    radios.forEach(radio => {
+        radio.addEventListener('click', function () {
+            radioVal = radio.value;
+            applySort(radioVal)
+        });
+    });
+
+    function applySort(val) {
+        let sortHtml = '';
+        if(val == "guild") {
+            allAvail.forEach((item, idx) => {
+                sortHtml += `<p id="${item.user_id}" style="margin-block-end: 0em;"><a href="${item.url}" target="_blank" style="font-size: 14px">${item.name} (${item.level})</a></p>`;
+            });
+        }
+        else if(val == "levelHigh") {
+            sortAvailHigh.forEach((item, idx) => {
+                sortHtml += `<p id="${item.user_id}" style="margin-block-end: 0em;"><a href="${item.url}" target="_blank" style="font-size: 14px">${item.name} (${item.level})</a></p>`;
+            });
+        }
+        else {
+            sortAvailLow.forEach((item, idx) => {
+                sortHtml += `<p id="${item.user_id}" style="margin-block-end: 0em;"><a href="${item.url}" target="_blank" style="font-size: 14px">${item.name} (${item.level})</a></p>`;
+            });
+        }
+        let div = document.getElementById('sorted');
+        div.innerHTML = sortHtml;
+    }
+
+    var main = async function() {
+        let fragment = document.createDocumentFragment();
+        let div = fragment.appendChild(document.createElement("div"));
+        div.setAttribute("style", "width: 150px; background-color:rgba(33, 33, 33, 0.75); padding: 1px;");
+
+        await getProfile();
+        await getWars();
+        let interval = setInterval(function() {
+            getProfile();
+        }, 1 * 60 * 1000);
+
+    }
+
+    var exclude = [];
+    // var getAllPvp = async function() {
+    function getAllPvp() {
+        let checkboxes = document.querySelectorAll('input[type=checkbox]:checked'); 
+        // var checked = [].filter.call( checkboxes, function( el ) {
+        //     return el.checked
+        // });
+        console.log(checkboxes);
+
+        // getAttackable();
+    }
+
+    main();
+</script>
+
+</html>
