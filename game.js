@@ -1,8 +1,8 @@
 let game;
 let gameOptions = {
-    fieldSize: 6,
-    gemColors: 6,
-    gemSize: 100,
+    fieldSize: 4,
+    gemColors: 7,
+    gemSize: 128,
     swapSpeed: 100,
     fallSpeed: 100,
     destroySpeed: 200
@@ -15,8 +15,8 @@ const DEG_270 = DEG_90 + DEG_180;
 
 window.onload = function() {
     let gameConfig = {
-        width: 700,
-        height: 700,
+        width: 512,
+        height: 512,
         scene: playGame,
     }
     game = new Phaser.Game(gameConfig);
@@ -31,7 +31,7 @@ class playGame extends Phaser.Scene{
     }
 
     preload() {
-        this.load.spritesheet("gemsAll", "assets/sprites/gems49.png", {
+        this.load.spritesheet("gemsAll", "assets/sprites/ftm_1.png", {
             frameWidth: gameOptions.gemSize,
             frameHeight: gameOptions.gemSize
         });
